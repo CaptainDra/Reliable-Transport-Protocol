@@ -96,10 +96,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
 
     private int numOfCorruptedPacket = 0;
     private int numOfRetransmittedPacket = 0;
-    private int numOfACKedPacked = 0;
+    private int numOfACKedPacket = 0;
     private HashSet<Packet> arrivedPacket;
     private LinkedList<Packet> sendingWindow;
     private Packet lastReceivedPacket;
+
+    private LinkedList<Packet> receieverBuffer;
 
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
@@ -227,10 +229,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
         if (isDuplicated(packet)) {
             System.out.println("Receive duplicated packet");
             toLayer3(B, lastReceivedPacket);
-            numOfACKedPacked++;
+            numOfACKedPacket++;
             return;
         }
-
+        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
+            toLayer5(packet.getPayload());
+            lastReceivedPacket = packet;
+        } else {
+            receieverBuffer.add(packet);
+            toLayer3(B, lastReceivedPacket);
+        }
+        numOfACKedPacket++;
     }
 
     // This routine will be called once, before any of your other B-side 
