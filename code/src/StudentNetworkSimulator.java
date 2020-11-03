@@ -96,8 +96,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
 
     private int numOfCorruptedPacket = 0;
     private int numOfRetransmittedPacket = 0;
+    private int numOfACKedPacked = 0;
     private HashSet<Packet> arrivedPacket;
     private LinkedList<Packet> sendingWindow;
+    private Packet lastReceivedPacket;
 
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
@@ -168,7 +170,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
             numOfCorruptedPacket++;
             return;
         }
-        if (arrivedPacket.contains(packet)){
+        if (isDuplicated(packet)){
             System.out.println("Receive duplicated packet");
             stopTimer(A);
             numOfRetransmittedPacket++;
@@ -217,6 +219,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // sent from the A-side.
     protected void bInput(Packet packet)
     {
+        if (isCorrupted(packet)) {
+            System.out.println("Receive corrupted packet");
+            numOfCorruptedPacket++;
+            return;
+        }
+        if (isDuplicated(packet)) {
+            System.out.println("Receive duplicated packet");
+            toLayer3(B, lastReceivedPacket);
+            numOfACKedPacked++;
+            return;
+        }
 
     }
 
@@ -264,5 +277,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
+
+    private boolean isDuplicated (Packet packet) {
+        return arrivedPacket.contains(packet);
+    }
+
 
 }
