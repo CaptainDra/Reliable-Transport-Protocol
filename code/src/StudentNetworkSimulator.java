@@ -117,16 +117,39 @@ public class StudentNetworkSimulator extends NetworkSimulator
         LimitSeqNo = winsize*2; // set appropriately; assumes SR here!
         RxmtInterval = delay;
     }
+    // A
+    private int seqNo = 0;
 
+    private LinkedList<Packet> senderBuffer = new LinkedList<>();
+    private int head = 0;
 
+    // init
+    private boolean[] ACK;
+    Packet[] senderWindow;
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
     // the data in such a message is delivered in-order, and correctly, to
     // the receiving upper layer.
+    // where message is a structure of type msg, containing data to be sent to
+    //the B-side.
     protected void aOutput(Message message)
     {
+        String data = message.getData();
+        //seq ack check playLoad
+        Packet aPacket = new Packet(seqNo, -1, 0, data);
+        // TODO check
+        //aPacket.setChecksum()
+        senderBuffer.add(aPacket);
+        seqNo++;
+        int thisHead = head;
 
+
+        for(int i = 0; i < WindowSize; i++){
+            senderWindow[i] = senderBuffer.get(i+thisHead);
+        }
+        // TODO toLayer3?
     }
+
 
     // This routine will be called whenever a packet sent from the B-side 
     // (i.e. as a result of a toLayer3() being done by a B-side procedure)
@@ -161,7 +184,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // for how the timer is started and stopped. 
     protected void aTimerInterrupt()
     {
-
+        // TODO more after finish AInput & AOutput
+        stopTimer(A);
+        startTimer(A, RxmtInterval);
     }
 
     // This routine will be called once, before any of your other A-side 
@@ -170,7 +195,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity A).
     protected void aInit()
     {
-
+        senderWindow = new Packet[WindowSize];
+        ACK = new boolean[WindowSize];
+        for(int i = 0; i < WindowSize; i++){
+            ACK[i] = false;
+        }
     }
 
     // This routine will be called whenever a packet sent from the B-side 
