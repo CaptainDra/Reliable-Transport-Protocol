@@ -95,7 +95,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
 
 
     private int numOfCorruptedPacket = 0;
+    private int numOfRetransmittedPacket = 0;
     private HashSet<Packet> arrivedPacket;
+    private LinkedList<Packet> sendingWindow;
 
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
@@ -165,16 +167,23 @@ public class StudentNetworkSimulator extends NetworkSimulator
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
             return;
-        } else if (arrivedPacket.contains(packet)){
-            System.out.println("Receive duplicated packet");
-            //TODO: retransmit
-            return;
-        } else {
-            arrivedPacket.add(packet);
-            //TODO: slide window
-            //TODO: send new dara packets
-            //TODO: wait
         }
+        if (arrivedPacket.contains(packet)){
+            System.out.println("Receive duplicated packet");
+            stopTimer(A);
+            numOfRetransmittedPacket++;
+            if (sendingWindow != null && sendingWindow.size() > 0) {
+                toLayer3(A, sendingWindow.getLast());
+                startTimer(A, RxmtInterval);
+            }
+            return;
+        }
+
+        arrivedPacket.add(packet);
+        //TODO: slide window
+        //TODO: send new dara packets
+        //TODO: wait
+
 
     }
 
