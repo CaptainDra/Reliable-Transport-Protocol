@@ -1,5 +1,7 @@
-import java.util.*;
-import java.io.*;
+package GoBackN;
+
+import java.util.HashSet;
+import java.util.LinkedList;
 
 public class StudentNetworkSimulator extends NetworkSimulator
 {
