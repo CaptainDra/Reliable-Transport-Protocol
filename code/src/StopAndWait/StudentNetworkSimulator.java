@@ -1,5 +1,7 @@
 package StopAndWait;
 
+import com.sun.xml.internal.bind.v2.runtime.reflect.Lister;
+
 import java.util.HashSet;
 import java.util.LinkedList;
 
@@ -104,6 +106,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private Packet lastReceivedPacket;
 
     private LinkedList<Packet> receieverBuffer;
+    private int lastSeqNum;
 
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
@@ -165,30 +168,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // sent from the B-side.
     protected void aInput(Packet packet)
     {
-//        1. check if the ACK packet is corrupted and take appropriate action
-//        2. if get new ACK, slide window and sent new data packets waiting
-//        3. if duplicate, retransmit first unACK data packet
-
-        if (isCorrupted(packet)) {
-            System.out.println("Receive corrupted packet");
-            numOfCorruptedPacket++;
-            return;
-        }
-        if (isDuplicated(packet)){
-            System.out.println("Receive duplicated packet");
-            stopTimer(A);
-            numOfRetransmittedPacket++;
-            if (sendingWindow != null && sendingWindow.size() > 0) {
-                toLayer3(A, sendingWindow.getLast());
-                startTimer(A, RxmtInterval);
-            }
-            return;
-        }
-
-        arrivedPacket.add(packet);
-
-
-
+    	if (isCorrupted(packet)) {
+    		System.out.println("Corrupted packet received.");
+    		numOfCorruptedPacket++;
+    		return;
+    	}
+    	if (packet.getAcknum() != lastSeqNum) {
+    		System.out.println("Packet to the other side corrupted.");
+    		return;
+    	}
+        stopTimer(A);
+        lastSeqNum = packet.getSeqnum();
     }
 
     // This routine will be called when A's timer expires (thus generating a 
@@ -221,32 +211,20 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // sent from the A-side.
     protected void bInput(Packet packet)
     {
-
-//        1. Check if the packet is corrupted and take appropriate actions
-//        2.If the data packet is new, and in-order, deliver the data to layer5 and send ACK to A.
-//          Note that you might have subsequent data packets waiting in the buffer at B that also need to be delivered to layer5
-//        3.If the data packet is new, and out of order, buffer the data packet and send an ACK
-//        4.If the data packet is duplicate, drop it and send an ACK
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
             return;
         }
-        if (isDuplicated(packet)) {
+        if (packet.getSeqnum() + lastSeqNum != 1) { //duplicate
             System.out.println("Receive duplicated packet");
             toLayer3(B, lastReceivedPacket);
-            numOfACKedPacket++;
-            return;
-        }
-        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
-            toLayer5(packet.getPayload());
-            lastReceivedPacket = packet;
-            toLayer3(B, lastReceivedPacket);
         } else {
-            receieverBuffer.add(packet);
+            System.out.println("Receive right packet");
+            toLayer5(packet.getPayload());
             toLayer3(B, lastReceivedPacket);
+            lastSeqNum = packet.getSeqnum();
         }
-        numOfACKedPacket++;
     }
 
     // This routine will be called once, before any of your other B-side 
@@ -292,10 +270,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
 
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
-    }
-
-    private boolean isDuplicated (Packet packet) {
-        return arrivedPacket.contains(packet);
     }
 
 
