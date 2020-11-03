@@ -93,6 +93,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private double RxmtInterval;
     private int LimitSeqNo;
 
+
+    private int numOfCorruptedPacket = 0;
+
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
     // state information for A or B.
@@ -130,6 +133,15 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // sent from the B-side.
     protected void aInput(Packet packet)
     {
+//        1. check if the ACK packet is corrupted and take appropriate action
+//        2. if get new ACK, slide window and sent new data packets waiting
+//        3. if duplicate, retransmit first unACK data packet
+
+        if (isCorrupted(packet)) {
+            System.out.println("Receive corrupted packet");
+            numOfCorruptedPacket++;
+            return;
+        }
 
     }
 
@@ -189,6 +201,20 @@ public class StudentNetworkSimulator extends NetworkSimulator
         System.out.println("\nEXTRA:");
         // EXAMPLE GIVEN BELOW
         //System.out.println("Example statistic you want to check e.g. number of ACK packets received by A :" + "<YourVariableHere>");
+    }
+
+    private int getCheckSumFromPacket (Packet packet) {
+        String payLoad = packet.getPayload();
+        int checkSum = 0;
+        for (int i = 0; i < payLoad.length(); i++) {
+            checkSum += (int) payLoad.charAt(i);
+        }
+        checkSum += packet.getSeqnum() + packet.getAcknum();
+        return checkSum;
+    }
+
+    private boolean isCorrupted (Packet packet) {
+        return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
 
 }
