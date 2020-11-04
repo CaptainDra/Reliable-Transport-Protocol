@@ -119,9 +119,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // GBN A
     private int N;
     private int left;
-    private int base;
     private int seqNo;
-    private int frameSize;
     private ArrayList<Packet> buffer;
     private int buffMaximum;
     private Queue<Packet> Disk;
