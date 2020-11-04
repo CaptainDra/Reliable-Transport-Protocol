@@ -136,13 +136,20 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private Packet unACKPacket;
     private LinkedList<Packet> senderBuffer = new LinkedList<>();
     private int head = 0;
+    private int ack = -1; // -1: A not send, 0: A sent 1:A get
 
     // B
     private int seqB;
 
-    // init
-    private boolean[] ACK;
-    Packet[] senderWindow;
+    // result
+    private int originalPacketsNumber = 0;
+    private int retransmissionsNumber = 0;
+    private int dataTo5AtB = 0;
+    private int ACKByB = 0;
+
+
+
+
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
     // the data in such a message is delivered in-order, and correctly, to
@@ -153,9 +160,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         String data = message.getData();
         //seq ack check playLoad
-        Packet aPacket = new Packet(seqNo, 0, getCheckSumFromMessage(data), data);
+        Packet aPacket = new Packet(seqNo, -1, getCheckSumFromMessage(data), data);
+        ack = 0;
+        // record this packet
         unACKPacket = aPacket;
+        originalPacketsNumber++;
         toLayer3(A,aPacket);
+        stopTimer(A);
         startTimer(A,RxmtInterval);
     }
 
@@ -169,6 +180,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     	if (isCorrupted(packet)) {
     		System.out.println("Corrupted packet received.");
     		numOfCorruptedPacket++;
+    		// 这里应该resend吧
     		return;
     	}
     	if (packet.getAcknum() != lastSeqNum) {
@@ -185,9 +197,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // for how the timer is started and stopped. 
     protected void aTimerInterrupt()
     {
-        startTimer(A, RxmtInterval);
         Packet aPacket = unACKPacket;
         toLayer3(A, aPacket);
+        retransmissionsNumber++;
+        stopTimer(A);
+        startTimer(A, RxmtInterval);
     }
 
     // This routine will be called once, before any of your other A-side 
@@ -198,6 +212,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         seqNo = 0;
         unACKPacket = null;
+        ack = -1;
     }
 
     // This routine will be called whenever a packet sent from the B-side 
@@ -217,6 +232,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
         } else {
             System.out.println("Receive right packet");
             toLayer5(packet.getPayload());
+            dataTo5AtB++;
+            ACKByB++;
             toLayer3(B, lastReceivedPacket);
             lastSeqNum = packet.getSeqnum();
         }
@@ -236,14 +253,14 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
         System.out.println("\n\n===============STATISTICS=======================");
-        System.out.println("Number of original packets transmitted by A:" + "<YourVariableHere>");
-        System.out.println("Number of retransmissions by A:" + "<YourVariableHere>");
-        System.out.println("Number of data packets delivered to layer 5 at B:" + "<YourVariableHere>");
-        System.out.println("Number of ACK packets sent by B:" + "<YourVariableHere>");
-        System.out.println("Number of corrupted packets:" + "<YourVariableHere>");
-        System.out.println("Ratio of lost packets:" + "<YourVariableHere>" );
-        System.out.println("Ratio of corrupted packets:" + "<YourVariableHere>");
-        System.out.println("Average RTT:" + "<YourVariableHere>");
+        System.out.println("Number of original packets transmitted by A:" + originalPacketsNumber);
+        System.out.println("Number of retransmissions by A:" + retransmissionsNumber);
+        System.out.println("Number of data packets delivered to layer 5 at B:" + dataTo5AtB);
+        System.out.println("Number of ACK packets sent by B:" + ACKByB);
+        System.out.println("Number of corrupted packets:" + numOfCorruptedPacket);
+        System.out.println("Ratio of lost packets:" +  (double)(retransmissionsNumber-numOfCorruptedPacket)/(double)(originalPacketsNumber));
+        System.out.println("Ratio of corrupted packets:" + (double)(numOfCorruptedPacket)/(double)(originalPacketsNumber));
+        System.out.println("Average RTT:" + RxmtInterval);
         System.out.println("Average communication time:" + "<YourVariableHere>");
         System.out.println("==================================================");
 
