@@ -1,7 +1,10 @@
 package StopAndWait;
 
 import com.sun.xml.internal.bind.v2.runtime.reflect.Lister;
-
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.IntStream;
 import java.util.HashSet;
 import java.util.LinkedList;
 
@@ -129,10 +132,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         RxmtInterval = delay;
     }
     // A
-    private int seqNo = 0;
-
+    private int seqNo;
+    private Packet unACKPacket;
     private LinkedList<Packet> senderBuffer = new LinkedList<>();
     private int head = 0;
+
+    // B
+    private int seqB;
 
     // init
     private boolean[] ACK;
@@ -147,18 +153,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         String data = message.getData();
         //seq ack check playLoad
-        Packet aPacket = new Packet(seqNo, -1, 0, data);
-        // TODO check
-        //aPacket.setChecksum()
-        senderBuffer.add(aPacket);
-        seqNo++;
-        int thisHead = head;
-
-
-        for(int i = 0; i < WindowSize; i++){
-            senderWindow[i] = senderBuffer.get(i+thisHead);
-        }
-        // TODO toLayer3?
+        Packet aPacket = new Packet(seqNo, 0, getCheckSumFromMessage(data), data);
+        unACKPacket = aPacket;
+        toLayer3(A,aPacket);
+        startTimer(A,RxmtInterval);
     }
 
 
@@ -187,9 +185,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // for how the timer is started and stopped. 
     protected void aTimerInterrupt()
     {
-        // TODO more after finish AInput & AOutput
-        stopTimer(A);
         startTimer(A, RxmtInterval);
+        Packet aPacket = unACKPacket;
+        toLayer3(A, aPacket);
     }
 
     // This routine will be called once, before any of your other A-side 
@@ -198,11 +196,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity A).
     protected void aInit()
     {
-        senderWindow = new Packet[WindowSize];
-        ACK = new boolean[WindowSize];
-        for(int i = 0; i < WindowSize; i++){
-            ACK[i] = false;
-        }
+        seqNo = 0;
+        unACKPacket = null;
     }
 
     // This routine will be called whenever a packet sent from the B-side 
@@ -233,7 +228,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity B).
     protected void bInit()
     {
-
+        seqB = 0;
     }
 
     // Use to print final statistics
@@ -267,7 +262,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         checkSum += packet.getSeqnum() + packet.getAcknum();
         return checkSum;
     }
-
+    private  int getCheckSumFromMessage(String data){
+        int checkSum = 0;
+        for (int i = 0; i < data.length(); i++) {
+            checkSum += (int) data.charAt(i);
+        }
+        return checkSum;
+    }
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
