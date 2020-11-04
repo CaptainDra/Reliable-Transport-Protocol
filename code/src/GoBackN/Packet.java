@@ -6,6 +6,7 @@ public class Packet
     private int acknum;
     private int checksum;
     private String payload;
+    private int[] sack;
 
     public Packet(Packet p)
     {
