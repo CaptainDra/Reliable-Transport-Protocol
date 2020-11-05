@@ -128,10 +128,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
     Packet[] senderWindow;
     Packet[] receiverWindow;
     HashMap<Integer, Double> seqToTime = new HashMap<>();
-
+    private int numOfOriginalTransPacket = 0;
     private int numOfCorruptedPacket = 0;
     private int numOfRetransmittedPacket = 0;
     private int numOfACKedPacket = 0;
+    private int numOfDeliverTo5 = 0;
     private Packet lastReceivedPacket;
 
 
@@ -219,6 +220,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         toLayer3(A, senderWindow[head % WindowSize]);
         seqToTime.put(senderWindow[head % WindowSize].getSeqnum(), getTime());
+        numOfRetransmittedPacket++;
         stopTimer(A);
         startTimer(A, RxmtInterval);
     }
@@ -259,10 +261,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         }
         if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
             toLayer5(packet.getPayload());
+            numOfDeliverTo5++;
             lastReceivedPacket = packet;
+            numOfACKedPacket++;
             while (receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize] != null &&
                     receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getSeqnum() == (lastReceivedPacket.getSeqnum() + 1)) {
                 toLayer5(receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getPayload());
+                numOfDeliverTo5++;
                 lastReceivedPacket = receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize];
                 numOfACKedPacket++;
             }
@@ -270,8 +275,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
         } else {
             receiverWindow[packet.getSeqnum() % WindowSize] = packet;
             toLayer3(B, lastReceivedPacket);
+            numOfACKedPacket++;
         }
-        numOfACKedPacket++;
     }
 
     // This routine will be called once, before any of your other B-side 
@@ -286,15 +291,18 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // Use to print final statistics
     protected void Simulation_done()
     {
+        int totalPacket = numOfOriginalTransPacket + numOfRetransmittedPacket + numOfACKedPacket;
+        double lostRatio = (numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
+        double corruptionRatio = (numOfCorruptedPacket) / (double) totalPacket;
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
         System.out.println("\n\n===============STATISTICS=======================");
-        System.out.println("Number of original packets transmitted by A:" + "<YourVariableHere>");
-        System.out.println("Number of retransmissions by A:" + "<YourVariableHere>");
-        System.out.println("Number of data packets delivered to layer 5 at B:" + "<YourVariableHere>");
-        System.out.println("Number of ACK packets sent by B:" + "<YourVariableHere>");
-        System.out.println("Number of corrupted packets:" + "<YourVariableHere>");
-        System.out.println("Ratio of lost packets:" + "<YourVariableHere>" );
-        System.out.println("Ratio of corrupted packets:" + "<YourVariableHere>");
+        System.out.println("Number of original packets transmitted by A:" + numOfOriginalTransPacket);
+        System.out.println("Number of retransmissions by A:" + numOfRetransmittedPacket);
+        System.out.println("Number of data packets delivered to layer 5 at B:" + numOfDeliverTo5);
+        System.out.println("Number of ACK packets sent by B:" + numOfACKedPacket);
+        System.out.println("Number of corrupted packets:" + numOfCorruptedPacket);
+        System.out.println("Ratio of lost packets:" + lostRatio);
+        System.out.println("Ratio of corrupted packets:" + corruptionRatio);
         System.out.println("Average RTT:" + "<YourVariableHere>");
         System.out.println("Average communication time:" + "<YourVariableHere>");
         System.out.println("==================================================");
@@ -347,6 +355,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
             toLayer3(A, senderWindow[i]);
             ACKed[i] = true;
             seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            numOfOriginalTransPacket++;
             stopTimer(A);
             startTimer(A, RxmtInterval);
         }
