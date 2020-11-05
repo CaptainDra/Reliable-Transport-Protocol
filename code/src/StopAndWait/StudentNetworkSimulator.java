@@ -286,14 +286,21 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void Simulation_done()
     {
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
+        int totalPacket = originalPacketsNumber + retransmissionsNumber + ACKByB;
+        double lostRatio = (retransmissionsNumber - corruptNum) / (double) totalPacket;
+        double corruptionRatio = (corruptNum) / (double) (totalPacket - (retransmissionsNumber - numOfCorruptedPacket));
+
+
         System.out.println("\n\n===============STATISTICS=======================");
         System.out.println("Number of original packets transmitted by A:" + originalPacketsNumber);
         System.out.println("Number of retransmissions by A:" + retransmissionsNumber);
         System.out.println("Number of data packets delivered to layer 5 at B:" + dataTo5AtB);
         System.out.println("Number of ACK packets sent by B:" + ACKByB);
         System.out.println("Number of corrupted packets:" + corruptNum);
-        System.out.println("Ratio of lost packets:" +  (double)(retransmissionsNumber-numOfCorruptedPacket)/(double)(originalPacketsNumber));
-        System.out.println("Ratio of corrupted packets:" + (double)(corruptNum)/(double)(originalPacketsNumber));
+//        System.out.println("Ratio of lost packets:" +  (double)(retransmissionsNumber-numOfCorruptedPacket)/(double)(originalPacketsNumber));
+//        System.out.println("Ratio of corrupted packets:" + (double)(corruptNum)/(double)(originalPacketsNumber));
+        System.out.println("Ratio of lost packets:" +  lostRatio);
+        System.out.println("Ratio of corrupted packets:" + corruptionRatio);
         System.out.println("Average RTT:" );
         System.out.println("Average communication time:" + "<YourVariableHere>");
         System.out.println("==================================================");
