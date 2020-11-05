@@ -152,31 +152,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
         senderBuffer.add(newPacket);
         seqNo++;
 
-        int iter = head;
-        int end = head + WindowSize;
+        bufferContent(head);
+        sendAllInWindow();
 
-        while (iter < end && iter < senderBuffer.size()) {
-            if (senderWindow[iter % WindowSize] != null) {
-                iter++;
-                continue;
-            }
-            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
-            iter++;
-        }
-
-        for (int i = 0; i < senderWindow.length; i++) {
-            if (senderWindow[i] == null) {
-                continue;
-            }
-            if (ACKed[i]) {
-                continue;
-            }
-            toLayer3(A, senderWindow[i]);
-            ACKed[i] = true;
-            seqToTime.put(senderWindow[i].getSeqnum(), getTime());
-            stopTimer(A);
-            startTimer(A, RxmtInterval);
-        }
 
 //        System.out.println("A Output: End");
 //
@@ -186,7 +164,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        for(int i = 0; i < WindowSize; i++){
 //            senderWindow[i] = senderBuffer.get(i+thisHead);
 //        }
-//        // TODO toLayer3?
     }
 
 
@@ -200,6 +177,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        2. if get new ACK, slide window and sent new data packets waiting
 //        3. if duplicate, retransmit first unACK data packet
 
+
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
@@ -209,17 +187,40 @@ public class StudentNetworkSimulator extends NetworkSimulator
             System.out.println("Receive duplicated packet");
             stopTimer(A);
             numOfRetransmittedPacket++;
-            if (sendingWindow != null && sendingWindow.size() > 0) {
-                toLayer3(A, sendingWindow.getLast());
+            //get last unACKed packet
+            for (int i = head; i < senderWindow.length; i++) {
+                if (ACKed[i]) {
+                    continue;
+                }
+                if (senderWindow[i] == null) {
+                    continue;
+                }
+                toLayer3(A, senderWindow[i]);
+                ACKed[i] = true;
+                seqToTime.put(senderWindow[i].getSeqnum(), getTime());
                 startTimer(A, RxmtInterval);
+                return;
             }
-            return;
+        }
+        // new packet
+        System.out.println("Receive right packet");
+        stopTimer(A);
+        ACKed[packet.getAcknum() % WindowSize] = true;
+        if (packet.getAcknum() > head) {
+            System.out.println("Received Cumulative ACK");
+        } else {
+            System.out.println("Received ACK");
         }
 
-        arrivedPacket.add(packet);
+        //slide window
+        for (int i = head; i < packet.getAcknum() + 1; i++) {
+            ACKed[i % WindowSize] = false;
+            senderWindow[i % WindowSize] = null;
+        }
+        head = packet.getAcknum() + 1;
 
-
-
+        bufferContent(head);
+        sendAllInWindow();
     }
 
     // This routine will be called when A's timer expires (thus generating a 
@@ -326,8 +327,36 @@ public class StudentNetworkSimulator extends NetworkSimulator
     }
 
     private boolean isDuplicated (Packet packet) {
-        return arrivedPacket.contains(packet);
+        return ACKed[packet.getAcknum() % WindowSize];
     }
 
+    private void bufferContent(int windowHead) {
+        int iter = windowHead;
+        int end = windowHead + WindowSize;
+        while (iter < end && iter < senderBuffer.size()) {
+            if (senderWindow[iter % WindowSize] != null) {
+                iter++;
+                continue;
+            }
+            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
+            iter++;
+        }
+    }
+
+    private void sendAllInWindow() {
+        for (int i = 0; i < senderWindow.length; i++) {
+            if (senderWindow[i] == null) {
+                continue;
+            }
+            if (ACKed[i]) {
+                continue;
+            }
+            toLayer3(A, senderWindow[i]);
+            ACKed[i] = true;
+            seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            stopTimer(A);
+            startTimer(A, RxmtInterval);
+        }
+    }
 
 }
