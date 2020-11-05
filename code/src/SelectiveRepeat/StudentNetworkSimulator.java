@@ -220,12 +220,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //            }
 
 
-
-
-
-
-
-
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
@@ -256,80 +250,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
                 }
             }
         }
-//        if (ACKed[packet.getAcknum() % WindowSize]){
-//            System.out.println("Receive duplicated packet");
-//            stopTimer(A);
-//            numOfRetransmittedPacket++;
-//            //get last unACKed packet
-//
-//            for (int i = 0; i < senderWindow.length; i++) {
-//                if (ACKed[i]) {
-//                    continue;
-//                }
-//                if (senderWindow[i] == null) {
-//                    continue;
-//                }
-//                toLayer3(A, senderWindow[i]);
-//                ACKed[i] = true;
-//                seqToTime.put(senderWindow[i].getSeqnum(), getTime());
-//                startTimer(A, RxmtInterval);
-//                return;
-//            }
-//        } else {
-//            // new packet
-//            stopTimer(A);
-//            ACKed[packet.getAcknum() % WindowSize] = true;
-//
-//            if (packet.getAcknum() >= head) {
-//
-//                int oldHead = head;
-//                head = packet.getAcknum() + 1;
-//
-//                // Slide window up then transmit new data packets from buffer
-//                for (int i = oldHead; i < head; i++) {
-//                    ACKed[i % WindowSize] = false;
-//                    senderWindow[i % WindowSize] = null;
-//                }
-//
-//                // Add from buffer into window where space allows
-//                for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
-//                    if (senderWindow[i % WindowSize] == null) {
-//                        senderWindow[i % WindowSize] = senderBuffer.get(i);
-//                    }
-//                }
-//
-//                // For every packet in window, check if unsent. If so, send
-//                for (int i = 0; i < ACKed.length; i ++) {
-//                    if (senderWindow[i] != null && !ACKed[i]) {
-//                        ACKed[i] = true;
-//                        toLayer3(A, senderWindow[i]);
-//                        seqToTime.put(senderWindow[i].getSeqnum(), getTime());
-//                        numOfOriginalTransPacket++;
-//                        stopTimer(A);
-//                        startTimer(A, RxmtInterval);
-//                    }
-//                }
-//            }
 
-//            System.out.println("Receive right packet");
-//            stopTimer(A);
-//            ACKed[packet.getAcknum() % WindowSize] = true;
-//            if (packet.getAcknum() > head) {
-//                System.out.println("Received Cumulative ACK");
-//            } else {
-//                System.out.println("Received ACK");
-//            }
-//
-//            //slide window
-//            for (int i = head; i < packet.getAcknum() + 1; i++) {
-//                ACKed[i % WindowSize] = false;
-//                senderWindow[i % WindowSize] = null;
-//            }
-//            head = packet.getAcknum() + 1;
-//
-//            bufferContent(head);
-//            sendAllInWindow();
-//        }
 
 
     // This routine will be called when A's timer expires (thus generating a
@@ -417,7 +338,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         int totalPacket = numOfOriginalTransPacket + numOfRetransmittedPacket + numOfACKedPacket;
         double lostRatio = (numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
-        double corruptionRatio = (numOfCorruptedPacket) / (double) totalPacket;
+        double corruptionRatio = (numOfCorruptedPacket) / (double) (totalPacket - (numOfRetransmittedPacket - numOfCorruptedPacket));
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
         System.out.println("\n\n===============STATISTICS=======================");
         System.out.println("Number of original packets transmitted by A:" + numOfOriginalTransPacket);
@@ -456,21 +377,21 @@ public class StudentNetworkSimulator extends NetworkSimulator
     }
 
     private void bufferContent(int windowHead) {
-        for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
-            if (senderWindow[i % WindowSize] == null) {
-                senderWindow[i % WindowSize] = senderBuffer.get(i);
-            }
-        }
-//        int iter = windowHead;
-//        int end = windowHead + WindowSize;
-//        while (iter < end && iter < senderBuffer.size()) {
-//            if (senderWindow[iter % WindowSize] != null) {
-//                iter++;
-//                continue;
+//        for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
+//            if (senderWindow[i % WindowSize] == null) {
+//                senderWindow[i % WindowSize] = senderBuffer.get(i);
 //            }
-//            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
-//            iter++;
 //        }
+        int iter = windowHead;
+        int end = windowHead + WindowSize;
+        while (iter < end && iter < senderBuffer.size()) {
+            if (senderWindow[iter % WindowSize] != null) {
+                iter++;
+                continue;
+            }
+            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
+            iter++;
+        }
     }
 
     private void sendAllInWindow() {
