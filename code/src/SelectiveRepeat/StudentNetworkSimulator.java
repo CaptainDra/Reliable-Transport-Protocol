@@ -1,5 +1,6 @@
 package SelectiveRepeat;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 
@@ -132,8 +133,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private int head = 0;
 
     // init
-    private boolean[] ACK;
+    private boolean[] ACKed;
     Packet[] senderWindow;
+    HashMap<Integer, Double> seqToTime = new HashMap<>();
+
+
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
     // the data in such a message is delivered in-order, and correctly, to
@@ -144,18 +148,45 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         String data = message.getData();
         //seq ack check playLoad
-        Packet aPacket = new Packet(seqNo, -1, 0, data);
-        // TODO check
-        //aPacket.setChecksum()
-        senderBuffer.add(aPacket);
+        Packet newPacket = new Packet(seqNo, -1, 0, data);
+        senderBuffer.add(newPacket);
         seqNo++;
-        int thisHead = head;
 
+        int iter = head;
+        int end = head + WindowSize;
 
-        for(int i = 0; i < WindowSize; i++){
-            senderWindow[i] = senderBuffer.get(i+thisHead);
+        while (iter < end && iter < senderBuffer.size()) {
+            if (senderWindow[iter % WindowSize] != null) {
+                iter++;
+                continue;
+            }
+            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
+            iter++;
         }
-        // TODO toLayer3?
+
+        for (int i = 0; i < senderWindow.length; i++) {
+            if (senderWindow[i] == null) {
+                continue;
+            }
+            if (ACKed[i]) {
+                continue;
+            }
+            toLayer3(A, senderWindow[i]);
+            ACKed[i] = true;
+            seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            stopTimer(A);
+            startTimer(A, RxmtInterval);
+        }
+
+//        System.out.println("A Output: End");
+//
+//        int thisHead = head;
+//
+//
+//        for(int i = 0; i < WindowSize; i++){
+//            senderWindow[i] = senderBuffer.get(i+thisHead);
+//        }
+//        // TODO toLayer3?
     }
 
 
@@ -209,10 +240,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void aInit()
     {
         senderWindow = new Packet[WindowSize];
-        ACK = new boolean[WindowSize];
-        for(int i = 0; i < WindowSize; i++){
-            ACK[i] = false;
-        }
+        ACKed = new boolean[WindowSize]; // by initialization, all false
+//        for(int i = 0; i < WindowSize; i++){
+//            ACKed[i] = false;
+//        }
     }
 
     // This routine will be called whenever a packet sent from the B-side 
@@ -284,7 +315,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         String payLoad = packet.getPayload();
         int checkSum = 0;
         for (int i = 0; i < payLoad.length(); i++) {
-            checkSum += (int) payLoad.charAt(i);
+            checkSum += (int)payLoad.charAt(i);
         }
         checkSum += packet.getSeqnum() + packet.getAcknum();
         return checkSum;
