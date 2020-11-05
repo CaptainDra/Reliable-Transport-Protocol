@@ -2,11 +2,8 @@ package StopAndWait;
 
 import com.sun.xml.internal.bind.v2.runtime.reflect.Lister;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.IntStream;
-import java.util.HashSet;
-import java.util.LinkedList;
 
 public class StudentNetworkSimulator extends NetworkSimulator
 {
@@ -131,21 +128,29 @@ public class StudentNetworkSimulator extends NetworkSimulator
         LimitSeqNo = winsize*2; // set appropriately; assumes SR here!
         RxmtInterval = delay;
     }
-    // A
+    // SW A
+    //private int N;
+    // int left;
     private int seqNo;
-    private Packet unACKPacket;
-    private LinkedList<Packet> senderBuffer = new LinkedList<>();
-    private int head = 0;
-    private int ack = -1; // -1: A not send, 0: A sent 1:A get
+    //private ArrayList<Packet> buffer;
+    //private int buffMaximum;
+    //private Queue<GoBackN.Message> Disk;
+    private  int seqPtr;
+    private double waitTime;
+    Packet unACKPacket;
 
-    // B
-    private int seqB;
+    // SW B
+    private int sequenceNoExpected;
 
     // result
     private int originalPacketsNumber = 0;
     private int retransmissionsNumber = 0;
     private int dataTo5AtB = 0;
     private int ACKByB = 0;
+    private double rttStarted;
+    private double totalRtt = 0.0;
+    private int totalRttTime = 0;
+    private int corruptNum = 0;
 
 
 
@@ -158,16 +163,23 @@ public class StudentNetworkSimulator extends NetworkSimulator
     //the B-side.
     protected void aOutput(Message message)
     {
+        if(originalPacketsNumber != seqNo){
+            System.out.println("A: last process not done!");
+            return;
+        }
         String data = message.getData();
         //seq ack check playLoad
-        Packet aPacket = new Packet(seqNo, -1, getCheckSumFromMessage(data), data);
-        ack = 0;
+        //Packet aPacket = new Packet(seqNo, -1, getCheckSumFromMessage(data), data);
+        int seqA = seqNo;
+        int ACK = 0;
+        int check = getCheckSumFromMessage(data) + seqA + ACK;
+        Packet aPacket = new Packet(seqA,ACK,check,data);
         // record this packet
         unACKPacket = aPacket;
         originalPacketsNumber++;
+        System.out.println("A: Package from A was received through layer 5 ("+aPacket.getPayload()+")." + originalPacketsNumber);
         toLayer3(A,aPacket);
-        stopTimer(A);
-        startTimer(A,RxmtInterval);
+        startTimer(A,waitTime);
     }
 
 
@@ -178,17 +190,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void aInput(Packet packet)
     {
     	if (isCorrupted(packet)) {
-    		System.out.println("Corrupted packet received.");
-    		numOfCorruptedPacket++;
-    		// 这里应该resend吧
+    		System.out.println("A: Corrupted packet received.");
+    		corruptNum++;
     		return;
     	}
-    	if (packet.getAcknum() != lastSeqNum) {
-    		System.out.println("Packet to the other side corrupted.");
+    	if (packet.getAcknum() != seqNo) {
+    		System.out.println("A: Packet to the other side corrupted.");
     		return;
     	}
+        System.out.println("A: get ACK correct, wait for next!");
         stopTimer(A);
-        lastSeqNum = packet.getSeqnum();
+        seqNo++;
     }
 
     // This routine will be called when A's timer expires (thus generating a 
@@ -198,10 +210,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void aTimerInterrupt()
     {
         Packet aPacket = unACKPacket;
+        System.out.println("A: time out resend ("+aPacket.getPayload()+")." + aPacket.getSeqnum());
+
         toLayer3(A, aPacket);
         retransmissionsNumber++;
-        stopTimer(A);
-        startTimer(A, RxmtInterval);
+        startTimer(A, waitTime);
     }
 
     // This routine will be called once, before any of your other A-side 
@@ -210,9 +223,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity A).
     protected void aInit()
     {
-        seqNo = 0;
-        unACKPacket = null;
-        ack = -1;
+        System.out.println("A: init");
+        //N = 5;
+        seqNo= 0;
+        //left = 0;
+        WindowSize = 8;
+        //buffMaximum = 50;
+        //buffer = new ArrayList<>();
+        // Disk = new LinkedList<>();
+        seqPtr = 0;
+        //RxmtInterval = 200.0;
+        waitTime = 2 * RxmtInterval;
     }
 
     // This routine will be called whenever a packet sent from the B-side 
@@ -221,21 +242,34 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // sent from the A-side.
     protected void bInput(Packet packet)
     {
-        if (isCorrupted(packet)) {
-            System.out.println("Receive corrupted packet");
-            numOfCorruptedPacket++;
-            return;
-        }
-        if (packet.getSeqnum() + lastSeqNum != 1) { //duplicate
-            System.out.println("Receive duplicated packet");
-            toLayer3(B, lastReceivedPacket);
+        System.out.println("B: Package from A was received through layer 3 ("+packet.getPayload()+").");
+
+        if (isCorrupted(packet) || packet.getSeqnum() != sequenceNoExpected) {
+            System.out.println("B: Packet received from A is corrupt or repeated. Resending the ACK." + sequenceNoExpected + packet.getSeqnum());
+            if (isCorrupted(packet))
+                corruptNum++;
+            int seqB = packet.getSeqnum();
+            int ACK = 0;
+            if(!isCorrupted(packet)) ACK = seqB;
+            String message = "C|R";
+            int check = getCheckSumFromMessage(message) + seqB + ACK;
+            Packet newPacket = new Packet(seqB,ACK,check,message);
+            toLayer3(B, newPacket);
+            ACKByB++;
+            //return;
         } else {
-            System.out.println("Receive right packet");
-            toLayer5(packet.getPayload());
+            System.out.println("B: Packet received from A checks out. Switching to layer 5 and sending the ACK.");
+            String data = packet.getPayload();
+            toLayer5(data);
+            int seqB = packet.getSeqnum();
+            int ACK = seqB;
+            String message = "";
+            int check = getCheckSumFromMessage(message) + seqB + ACK;
+            Packet newPacket = new Packet(seqB,ACK,check,message);
+            toLayer3(B, newPacket);
+            sequenceNoExpected++;
             dataTo5AtB++;
             ACKByB++;
-            toLayer3(B, lastReceivedPacket);
-            lastSeqNum = packet.getSeqnum();
         }
     }
 
@@ -245,7 +279,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity B).
     protected void bInit()
     {
-        seqB = 0;
+        sequenceNoExpected = 0;
     }
 
     // Use to print final statistics
@@ -257,10 +291,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
         System.out.println("Number of retransmissions by A:" + retransmissionsNumber);
         System.out.println("Number of data packets delivered to layer 5 at B:" + dataTo5AtB);
         System.out.println("Number of ACK packets sent by B:" + ACKByB);
-        System.out.println("Number of corrupted packets:" + numOfCorruptedPacket);
+        System.out.println("Number of corrupted packets:" + corruptNum);
         System.out.println("Ratio of lost packets:" +  (double)(retransmissionsNumber-numOfCorruptedPacket)/(double)(originalPacketsNumber));
-        System.out.println("Ratio of corrupted packets:" + (double)(numOfCorruptedPacket)/(double)(originalPacketsNumber));
-        System.out.println("Average RTT:" + RxmtInterval);
+        System.out.println("Ratio of corrupted packets:" + (double)(corruptNum)/(double)(originalPacketsNumber));
+        System.out.println("Average RTT:" );
         System.out.println("Average communication time:" + "<YourVariableHere>");
         System.out.println("==================================================");
 
@@ -279,6 +313,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         checkSum += packet.getSeqnum() + packet.getAcknum();
         return checkSum;
     }
+
     private  int getCheckSumFromMessage(String data){
         int checkSum = 0;
         for (int i = 0; i < data.length(); i++) {
@@ -286,9 +321,19 @@ public class StudentNetworkSimulator extends NetworkSimulator
         }
         return checkSum;
     }
+
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
+    protected boolean corrupt(Packet p, int receiver) {
+        int toCompare = p.getAcknum() + p.getSeqnum();
+        int checksum = p.getChecksum();
+        // if (receiver == B) {
+        for (char c : p.getPayload().toCharArray()) {
+            toCompare += Character.getNumericValue(c);
+        }
+        // }
+        return checksum != toCompare;
 
-
+    }
 }
