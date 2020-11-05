@@ -97,15 +97,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private int LimitSeqNo;
 
 
-    private int numOfCorruptedPacket = 0;
-    private int numOfRetransmittedPacket = 0;
-    private int numOfACKedPacket = 0;
-    private HashSet<Packet> arrivedPacket;
-    private LinkedList<Packet> sendingWindow;
-    private Packet lastReceivedPacket;
-
-    private LinkedList<Packet> receieverBuffer;
-
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
     // state information for A or B.
@@ -135,7 +126,15 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // init
     private boolean[] ACKed;
     Packet[] senderWindow;
+    Packet[] receiverWindow;
     HashMap<Integer, Double> seqToTime = new HashMap<>();
+
+    private int numOfCorruptedPacket = 0;
+    private int numOfRetransmittedPacket = 0;
+    private int numOfACKedPacket = 0;
+    private Packet lastReceivedPacket;
+
+    private LinkedList<Packet> receieverBuffer;
 
 
     // This routine will be called whenever the upper layer at the sender [A]
@@ -155,15 +154,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
         bufferContent(head);
         sendAllInWindow();
 
-
-//        System.out.println("A Output: End");
-//
-//        int thisHead = head;
-//
-//
-//        for(int i = 0; i < WindowSize; i++){
-//            senderWindow[i] = senderBuffer.get(i+thisHead);
-//        }
     }
 
 
@@ -229,7 +219,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // for how the timer is started and stopped. 
     protected void aTimerInterrupt()
     {
-        // TODO more after finish AInput & AOutput
+        toLayer3(A, senderWindow[head % WindowSize]);
+        seqToTime.put(senderWindow[head % WindowSize].getSeqnum(), getTime());
         stopTimer(A);
         startTimer(A, RxmtInterval);
     }
@@ -242,9 +233,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
     {
         senderWindow = new Packet[WindowSize];
         ACKed = new boolean[WindowSize]; // by initialization, all false
-//        for(int i = 0; i < WindowSize; i++){
-//            ACKed[i] = false;
-//        }
     }
 
     // This routine will be called whenever a packet sent from the B-side 
@@ -287,7 +275,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // of entity B).
     protected void bInit()
     {
-
+        receiverWindow = new Packet[WindowSize];
     }
 
     // Use to print final statistics
