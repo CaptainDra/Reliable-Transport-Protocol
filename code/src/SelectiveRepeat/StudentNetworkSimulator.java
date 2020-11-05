@@ -134,6 +134,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private int numOfACKedPacket = 0;
     private int numOfDeliverTo5 = 0;
     private Packet lastReceivedPacket;
+    private int lastReceivedSeq = -1;
 
 
     // This routine will be called whenever the upper layer at the sender [A]
@@ -147,6 +148,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         String data = message.getData();
         //seq ack check playLoad
         Packet newPacket = new Packet(seqNo, -1, 0, data);
+        newPacket.setChecksum(getCheckSumFromPacket(newPacket));
         senderBuffer.add(newPacket);
         seqNo++;
 
@@ -156,7 +158,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     }
 
 
-    // This routine will be called whenever a packet sent from the B-side 
+    // This routine will be called whenever a packet sent from the B-side
     // (i.e. as a result of a toLayer3() being done by a B-side procedure)
     // arrives at the A-side.  "packet" is the (possibly corrupted) packet
     // sent from the B-side.
@@ -167,55 +169,173 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        3. if duplicate, retransmit first unACK data packet
 
 
+            // If new ack, stop timer and update ack status
+//            if (ACKed[packet.getAcknum() % WindowSize]) {
+//                stopTimer(A);
+//                ACKed[packet.getAcknum() % WindowSize] = false;
+//
+//                // If ack is head or greater, update head
+//                if (packet.getAcknum() >= head) {
+//                    if (packet.getAcknum() > head) {
+//                        System.out.printf("A Input: Received Cumulative ACK | Expected: %d Received: %d\n", head, packet.getAcknum());
+//                    } else {
+//                        System.out.println("A Input: Received ACK: " + packet.getAcknum());
+//                    }
+//                    int oldHead = head;
+//                    head = packet.getAcknum() + 1;
+//
+//                    // Slide window up then transmit new data packets from buffer
+//                    for (int i = oldHead; i < head; i++) {
+//                        ACKed[i % WindowSize] = false;
+//                        senderWindow[i % WindowSize] = null;
+//                    }
+//
+//                    // Add from buffer into window where space allows
+//                    for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
+//                        if (senderWindow[i % WindowSize] == null) {
+//                            senderWindow[i % WindowSize] = senderBuffer.get(i);
+//                        }
+//                    }
+//
+//                    // For every packet in window, check if unsent. If so, send
+//                    for (int i = 0; i < ACKed.length; i ++) {
+//                        if (senderWindow[i] != null && !ACKed[i]) {
+//                            ACKed[i] = true;
+//                            toLayer3(A, senderWindow[i]);
+//                            seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+//                            numOfOriginalTransPacket++;
+//                            stopTimer(A);
+//                            startTimer(A, RxmtInterval);
+//                        }
+//                    }
+//
+//                }
+//                // If duplicate ack, resend next packet
+//            } else if (ACKed[packet.getAcknum() % WindowSize]) {
+//                toLayer3(A, senderWindow[(packet.getAcknum() + 1) % WindowSize]);
+//                seqToTime.put(senderWindow[(packet.getAcknum() + 1) % WindowSize].getSeqnum(), getTime());
+//                numOfRetransmittedPacket++;
+//                stopTimer(A);
+//                startTimer(A, RxmtInterval);
+//            }
+
+
+
+
+
+
+
+
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
-            return;
-        }
-        if (isDuplicated(packet)){
-            System.out.println("Receive duplicated packet");
+        } else {
             stopTimer(A);
-            numOfRetransmittedPacket++;
-            //get last unACKed packet
-            for (int i = head; i < senderWindow.length; i++) {
-                if (ACKed[i]) {
-                    continue;
+            ACKed[packet.getAcknum() % WindowSize] = false;
+            if (ACKed[packet.getAcknum() % WindowSize]) {
+                if (packet.getAcknum() >= head) {
+                    int oldHead = head;
+                    head = packet.getAcknum() + 1;
+
+                    for (int i = oldHead; i < head; i++) {
+                        ACKed[i % WindowSize] = false;
+                        senderWindow[i % WindowSize] = null;
+                    }
+
+                    bufferContent(head);
+
+                    sendAllInWindow();
+
                 }
-                if (senderWindow[i] == null) {
-                    continue;
-                }
-                toLayer3(A, senderWindow[i]);
-                ACKed[i] = true;
-                seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            } else if (isDuplicated(packet)){
+                toLayer3(A, senderWindow[(packet.getAcknum() + 1) % WindowSize]);
+                seqToTime.put(senderWindow[(packet.getAcknum() + 1) % WindowSize].getSeqnum(), getTime());
+                numOfRetransmittedPacket++;
+                stopTimer(A);
                 startTimer(A, RxmtInterval);
-                return;
+                }
             }
         }
-        // new packet
-        System.out.println("Receive right packet");
-        stopTimer(A);
-        ACKed[packet.getAcknum() % WindowSize] = true;
-        if (packet.getAcknum() > head) {
-            System.out.println("Received Cumulative ACK");
-        } else {
-            System.out.println("Received ACK");
-        }
+//        if (ACKed[packet.getAcknum() % WindowSize]){
+//            System.out.println("Receive duplicated packet");
+//            stopTimer(A);
+//            numOfRetransmittedPacket++;
+//            //get last unACKed packet
+//
+//            for (int i = 0; i < senderWindow.length; i++) {
+//                if (ACKed[i]) {
+//                    continue;
+//                }
+//                if (senderWindow[i] == null) {
+//                    continue;
+//                }
+//                toLayer3(A, senderWindow[i]);
+//                ACKed[i] = true;
+//                seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+//                startTimer(A, RxmtInterval);
+//                return;
+//            }
+//        } else {
+//            // new packet
+//            stopTimer(A);
+//            ACKed[packet.getAcknum() % WindowSize] = true;
+//
+//            if (packet.getAcknum() >= head) {
+//
+//                int oldHead = head;
+//                head = packet.getAcknum() + 1;
+//
+//                // Slide window up then transmit new data packets from buffer
+//                for (int i = oldHead; i < head; i++) {
+//                    ACKed[i % WindowSize] = false;
+//                    senderWindow[i % WindowSize] = null;
+//                }
+//
+//                // Add from buffer into window where space allows
+//                for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
+//                    if (senderWindow[i % WindowSize] == null) {
+//                        senderWindow[i % WindowSize] = senderBuffer.get(i);
+//                    }
+//                }
+//
+//                // For every packet in window, check if unsent. If so, send
+//                for (int i = 0; i < ACKed.length; i ++) {
+//                    if (senderWindow[i] != null && !ACKed[i]) {
+//                        ACKed[i] = true;
+//                        toLayer3(A, senderWindow[i]);
+//                        seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+//                        numOfOriginalTransPacket++;
+//                        stopTimer(A);
+//                        startTimer(A, RxmtInterval);
+//                    }
+//                }
+//            }
 
-        //slide window
-        for (int i = head; i < packet.getAcknum() + 1; i++) {
-            ACKed[i % WindowSize] = false;
-            senderWindow[i % WindowSize] = null;
-        }
-        head = packet.getAcknum() + 1;
+//            System.out.println("Receive right packet");
+//            stopTimer(A);
+//            ACKed[packet.getAcknum() % WindowSize] = true;
+//            if (packet.getAcknum() > head) {
+//                System.out.println("Received Cumulative ACK");
+//            } else {
+//                System.out.println("Received ACK");
+//            }
+//
+//            //slide window
+//            for (int i = head; i < packet.getAcknum() + 1; i++) {
+//                ACKed[i % WindowSize] = false;
+//                senderWindow[i % WindowSize] = null;
+//            }
+//            head = packet.getAcknum() + 1;
+//
+//            bufferContent(head);
+//            sendAllInWindow();
+//        }
 
-        bufferContent(head);
-        sendAllInWindow();
-    }
 
-    // This routine will be called when A's timer expires (thus generating a 
-    // timer interrupt). You'll probably want to use this routine to control 
+    // This routine will be called when A's timer expires (thus generating a
+    // timer interrupt). You'll probably want to use this routine to control
     // the retransmission of packets. See startTimer() and stopTimer(), above,
-    // for how the timer is started and stopped. 
+    // for how the timer is started and stopped.
     protected void aTimerInterrupt()
     {
         toLayer3(A, senderWindow[head % WindowSize]);
@@ -225,7 +345,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         startTimer(A, RxmtInterval);
     }
 
-    // This routine will be called once, before any of your other A-side 
+    // This routine will be called once, before any of your other A-side
     // routines are called. It can be used to do any required
     // initialization (e.g. of member variables you add to control the state
     // of entity A).
@@ -235,7 +355,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         ACKed = new boolean[WindowSize]; // by initialization, all false
     }
 
-    // This routine will be called whenever a packet sent from the B-side 
+    // This routine will be called whenever a packet sent from the B-side
     // (i.e. as a result of a toLayer3() being done by an A-side procedure)
     // arrives at the B-side.  "packet" is the (possibly corrupted) packet
     // sent from the A-side.
@@ -253,23 +373,25 @@ public class StudentNetworkSimulator extends NetworkSimulator
             numOfCorruptedPacket++;
             return;
         }
-        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum()) {
+        packet.setAcknum(packet.getSeqnum());
+        packet.setChecksum(getCheckSumFromPacket(packet));
+        if (packet.getSeqnum() == lastReceivedSeq) {
             System.out.println("Receive duplicated packet");
             toLayer3(B, lastReceivedPacket);
             numOfACKedPacket++;
-            return;
-        }
-        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
+        } else if (packet.getSeqnum() == lastReceivedSeq + 1) {
             toLayer5(packet.getPayload());
             numOfDeliverTo5++;
             lastReceivedPacket = packet;
+            lastReceivedSeq++;
             numOfACKedPacket++;
-            while (receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize] != null &&
-                    receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getSeqnum() == (lastReceivedPacket.getSeqnum() + 1)) {
-                toLayer5(receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getPayload());
+            while (receiverWindow[(lastReceivedSeq + 1) % WindowSize] != null &&
+                    receiverWindow[(lastReceivedSeq + 1) % WindowSize].getSeqnum() == (lastReceivedSeq + 1)) {
+                toLayer5(receiverWindow[(lastReceivedSeq + 1) % WindowSize].getPayload());
                 numOfDeliverTo5++;
-                lastReceivedPacket = receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize];
+                lastReceivedPacket = receiverWindow[(lastReceivedSeq + 1) % WindowSize];
                 numOfACKedPacket++;
+                lastReceivedSeq++;
             }
             toLayer3(B, lastReceivedPacket);
         } else {
@@ -277,9 +399,11 @@ public class StudentNetworkSimulator extends NetworkSimulator
             toLayer3(B, lastReceivedPacket);
             numOfACKedPacket++;
         }
+
     }
 
-    // This routine will be called once, before any of your other B-side 
+
+    // This routine will be called once, before any of your other B-side
     // routines are called. It can be used to do any required
     // initialization (e.g. of member variables you add to control the state
     // of entity B).
@@ -332,16 +456,21 @@ public class StudentNetworkSimulator extends NetworkSimulator
     }
 
     private void bufferContent(int windowHead) {
-        int iter = windowHead;
-        int end = windowHead + WindowSize;
-        while (iter < end && iter < senderBuffer.size()) {
-            if (senderWindow[iter % WindowSize] != null) {
-                iter++;
-                continue;
+        for (int i = head; i < head + WindowSize && i < senderBuffer.size(); i++) {
+            if (senderWindow[i % WindowSize] == null) {
+                senderWindow[i % WindowSize] = senderBuffer.get(i);
             }
-            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
-            iter++;
         }
+//        int iter = windowHead;
+//        int end = windowHead + WindowSize;
+//        while (iter < end && iter < senderBuffer.size()) {
+//            if (senderWindow[iter % WindowSize] != null) {
+//                iter++;
+//                continue;
+//            }
+//            senderWindow[iter % WindowSize] = senderBuffer.get(iter);
+//            iter++;
+//        }
     }
 
     private void sendAllInWindow() {
