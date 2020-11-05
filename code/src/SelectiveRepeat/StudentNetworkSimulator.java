@@ -134,8 +134,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private int numOfACKedPacket = 0;
     private Packet lastReceivedPacket;
 
-    private LinkedList<Packet> receieverBuffer;
-
 
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
@@ -247,12 +245,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //          Note that you might have subsequent data packets waiting in the buffer at B that also need to be delivered to layer5
 //        3.If the data packet is new, and out of order, buffer the data packet and send an ACK
 //        4.If the data packet is duplicate, drop it and send an ACK
+
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
             return;
         }
-        if (isDuplicated(packet)) {
+        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum()) {
             System.out.println("Receive duplicated packet");
             toLayer3(B, lastReceivedPacket);
             numOfACKedPacket++;
@@ -261,9 +260,15 @@ public class StudentNetworkSimulator extends NetworkSimulator
         if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
             toLayer5(packet.getPayload());
             lastReceivedPacket = packet;
+            while (receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize] != null &&
+                    receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getSeqnum() == (lastReceivedPacket.getSeqnum() + 1)) {
+                toLayer5(receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize].getPayload());
+                lastReceivedPacket = receiverWindow[(lastReceivedPacket.getSeqnum() + 1) % WindowSize];
+                numOfACKedPacket++;
+            }
             toLayer3(B, lastReceivedPacket);
         } else {
-            receieverBuffer.add(packet);
+            receiverWindow[packet.getSeqnum() % WindowSize] = packet;
             toLayer3(B, lastReceivedPacket);
         }
         numOfACKedPacket++;
