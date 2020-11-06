@@ -1,3 +1,5 @@
+
+
 import java.util.*;
 import java.io.*;
 
@@ -93,16 +95,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private double RxmtInterval;
     private int LimitSeqNo;
 
-
-    private int numOfCorruptedPacket = 0;
-    private int numOfRetransmittedPacket = 0;
-    private int numOfACKedPacket = 0;
-    private HashSet<Packet> arrivedPacket;
-    private LinkedList<Packet> sendingWindow;
-    private Packet lastReceivedPacket;
-
-    private LinkedList<Packet> receieverBuffer;
-
     // Add any necessary class variables here.  Remember, you cannot use
     // these variables to send messages error free!  They can only hold
     // state information for A or B.
@@ -123,137 +115,171 @@ public class StudentNetworkSimulator extends NetworkSimulator
         LimitSeqNo = winsize*2; // set appropriately; assumes SR here!
         RxmtInterval = delay;
     }
-    // A
-    private int seqNo = 0;
 
-    private LinkedList<Packet> senderBuffer = new LinkedList<>();
-    private int head = 0;
+    //  A
+    private int N;
+    private int left;
+    private int seqNo;
+    private ArrayList<Packet> buffer;
+    private int buffMaximum;
+    private Queue<Message> Disk;
+    private  int seqPtr;
+    private double waitTime;
+    private int[] SACK;
 
-    // init
-    private boolean[] ACK;
-    Packet[] senderWindow;
+
+    // B
+    private int sequenceNoExpected;
+    private HashMap<Integer, Packet> bufferB;
+
+    // result
+    private int originalPacketsNumber = 0;
+    private int retransmissionsNumber = 0;
+    private int dataTo5AtB = 0;
+    private int ACKByB = 0;
+    private double rttStarted;
+    private double totalRtt = 0.0;
+    private int totalRttTime = 0;
+    private int corruptNum = 0;
+
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
     // the data in such a message is delivered in-order, and correctly, to
     // the receiving upper layer.
-    // where message is a structure of type msg, containing data to be sent to
-    //the B-side.
     protected void aOutput(Message message)
     {
-        String data = message.getData();
-        //seq ack check playLoad
-        Packet aPacket = new Packet(seqNo, -1, 0, data);
-        // TODO check
-        //aPacket.setChecksum()
-        senderBuffer.add(aPacket);
-        seqNo++;
-        int thisHead = head;
+        System.out.println("A: get message" + message.getData());
+        if(buffer.size() < buffMaximum + left + WindowSize){
+            String data = message.getData();
+            int seqA = buffer.size();
+            int ACK = seqA;
+            int check = getCheckSumFromMessage(data) + seqA + ACK;
+            buffer.add(new Packet(seqA,ACK,check,data));
+            try{
+                while(seqPtr < left + WindowSize && SACK[buffer.get(seqPtr).getSeqnum()] != 2){
+                    if (seqPtr < buffer.size())
+                        System.out.println("Sender: Sending packet " + seqPtr + " to receiver");
+                    toLayer3(A, buffer.get(seqPtr));
+                    SACK[buffer.get(seqPtr).getSeqnum()] = 1;
+                    if (left == seqPtr){
+                        startTimer(A,waitTime);
+                        rttStarted = getTime();
+                    }
 
-
-        for(int i = 0; i < WindowSize; i++){
-            senderWindow[i] = senderBuffer.get(i+thisHead);
+                    seqPtr++;
+                    originalPacketsNumber++;
+                }
+            }catch (IndexOutOfBoundsException e){
+                System.err.println("Sender: Window and buffer are empty. No more packets to send.");
+            }
         }
-        // TODO toLayer3?
+        else{
+            System.out.println("A: Buffer is full, saving the packet in Disk.");
+        }
     }
 
-
-    // This routine will be called whenever a packet sent from the B-side 
+    // This routine will be called whenever a packet sent from the B-side
     // (i.e. as a result of a toLayer3() being done by a B-side procedure)
     // arrives at the A-side.  "packet" is the (possibly corrupted) packet
     // sent from the B-side.
     protected void aInput(Packet packet)
     {
-//        1. check if the ACK packet is corrupted and take appropriate action
-//        2. if get new ACK, slide window and sent new data packets waiting
-//        3. if duplicate, retransmit first unACK data packet
-
+        System.out.println("A: Packet from layer 3 has been received");
         if (isCorrupted(packet)) {
-            System.out.println("Receive corrupted packet");
-            numOfCorruptedPacket++;
-            return;
-        }
-        if (isDuplicated(packet)){
-            System.out.println("Receive duplicated packet");
-            stopTimer(A);
-            numOfRetransmittedPacket++;
-            if (sendingWindow != null && sendingWindow.size() > 0) {
-                toLayer3(A, sendingWindow.getLast());
-                startTimer(A, RxmtInterval);
+            corruptNum++;
+            System.out.println("A: Packet corrupted!");
+        } else {
+            System.out.println("Sender: ACK packet correct");
+            left++;
+            if (left == seqPtr){
+                totalRtt = totalRtt + getTime() - rttStarted;
+                totalRttTime++;
+                stopTimer(A);
             }
-            return;
         }
-
-        arrivedPacket.add(packet);
-
-
-
     }
 
-    // This routine will be called when A's timer expires (thus generating a 
-    // timer interrupt). You'll probably want to use this routine to control 
+    // This routine will be called when A's timer expires (thus generating a
+    // timer interrupt). You'll probably want to use this routine to control
     // the retransmission of packets. See startTimer() and stopTimer(), above,
-    // for how the timer is started and stopped. 
+    // for how the timer is started and stopped.
     protected void aTimerInterrupt()
     {
-        // TODO more after finish AInput & AOutput
-        stopTimer(A);
-        startTimer(A, RxmtInterval);
+
     }
 
-    // This routine will be called once, before any of your other A-side 
+    // This routine will be called once, before any of your other A-side
     // routines are called. It can be used to do any required
     // initialization (e.g. of member variables you add to control the state
     // of entity A).
     protected void aInit()
     {
-        senderWindow = new Packet[WindowSize];
-        ACK = new boolean[WindowSize];
-        for(int i = 0; i < WindowSize; i++){
-            ACK[i] = false;
-        }
+        System.out.println("A: init");
+        N = 5;
+        seqNo= 0;
+        left = 0;
+        //WindowSize = 8;
+        buffMaximum = 50;
+        buffer = new ArrayList<>();
+        // Disk = new LinkedList<>();
+        seqPtr = 0;
+        //RxmtInterval = 200.0;
+        waitTime = 5 * RxmtInterval;
     }
 
-    // This routine will be called whenever a packet sent from the B-side 
+    // This routine will be called whenever a packet sent from the B-side
     // (i.e. as a result of a toLayer3() being done by an A-side procedure)
     // arrives at the B-side.  "packet" is the (possibly corrupted) packet
     // sent from the A-side.
     protected void bInput(Packet packet)
     {
+        System.out.println("B: Package from A was received through layer 3 ("+packet.getPayload()+").");
 
-//        1. Check if the packet is corrupted and take appropriate actions
-//        2.If the data packet is new, and in-order, deliver the data to layer5 and send ACK to A.
-//          Note that you might have subsequent data packets waiting in the buffer at B that also need to be delivered to layer5
-//        3.If the data packet is new, and out of order, buffer the data packet and send an ACK
-//        4.If the data packet is duplicate, drop it and send an ACK
         if (isCorrupted(packet)) {
-            System.out.println("Receive corrupted packet");
-            numOfCorruptedPacket++;
-            return;
-        }
-        if (isDuplicated(packet)) {
-            System.out.println("Receive duplicated packet");
-            toLayer3(B, lastReceivedPacket);
-            numOfACKedPacket++;
-            return;
-        }
-        if (packet.getSeqnum() == lastReceivedPacket.getSeqnum() + 1) {
-            toLayer5(packet.getPayload());
-            lastReceivedPacket = packet;
-            toLayer3(B, lastReceivedPacket);
+            System.out.println("B: Packet received from A is corrupt or repeated. Resending the ACK.");
+            if (isCorrupted(packet))
+                corruptNum++;
+            //return;
         } else {
-            receieverBuffer.add(packet);
-            toLayer3(B, lastReceivedPacket);
+            System.out.println("B: Packet received from A checks out. Switching to layer 5 and sending the ACK.");
+            String data = packet.getPayload();
+            if(sequenceNoExpected == packet.getSeqnum()){
+                toLayer5(data);
+                int seqB = packet.getSeqnum();
+                int ACK = seqB;
+                String message = "";
+                int check = getCheckSumFromMessage(message) + seqB + ACK;
+                Packet newPacket = new Packet(seqB,ACK,check,message);
+                toLayer3(B, newPacket);
+                dataTo5AtB++;
+                ACKByB++;
+                sequenceNoExpected++;
+                while(bufferB.containsKey(sequenceNoExpected)){
+                    Packet nextPacket = buffer.get(seqB);
+                    toLayer5(newPacket.getPayload());
+                    dataTo5AtB++;
+                    sequenceNoExpected++;
+                }
+            }else{
+                int seqB = packet.getSeqnum();
+                int ACK = seqB;
+                String message = "";
+                int check = getCheckSumFromMessage(message) + seqB + ACK;
+                Packet newPacket = new Packet(seqB,ACK,check,message);
+                toLayer3(B, newPacket);
+                ACKByB++;
+            }
         }
-        numOfACKedPacket++;
     }
 
-    // This routine will be called once, before any of your other B-side 
+    // This routine will be called once, before any of your other B-side
     // routines are called. It can be used to do any required
     // initialization (e.g. of member variables you add to control the state
     // of entity B).
     protected void bInit()
     {
-
+        sequenceNoExpected = 0;
+        bufferB = new HashMap<>();
     }
 
     // Use to print final statistics
@@ -277,7 +303,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
         // EXAMPLE GIVEN BELOW
         //System.out.println("Example statistic you want to check e.g. number of ACK packets received by A :" + "<YourVariableHere>");
     }
-
     private int getCheckSumFromPacket (Packet packet) {
         String payLoad = packet.getPayload();
         int checkSum = 0;
@@ -288,13 +313,26 @@ public class StudentNetworkSimulator extends NetworkSimulator
         return checkSum;
     }
 
+    private  int getCheckSumFromMessage(String data){
+        int checkSum = 0;
+        for (int i = 0; i < data.length(); i++) {
+            checkSum += (int) data.charAt(i);
+        }
+        return checkSum;
+    }
+
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
+    protected boolean corrupt(Packet p, int receiver) {
+        int toCompare = p.getAcknum() + p.getSeqnum();
+        int checksum = p.getChecksum();
+        // if (receiver == B) {
+        for (char c : p.getPayload().toCharArray()) {
+            toCompare += Character.getNumericValue(c);
+        }
+        // }
+        return checksum != toCompare;
 
-    private boolean isDuplicated (Packet packet) {
-        return arrivedPacket.contains(packet);
     }
-
-
 }

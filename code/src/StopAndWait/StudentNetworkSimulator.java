@@ -233,7 +233,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         // Disk = new LinkedList<>();
         seqPtr = 0;
         //RxmtInterval = 200.0;
-        waitTime = 2 * RxmtInterval;
+        waitTime = 5 * RxmtInterval;
     }
 
     // This routine will be called whenever a packet sent from the B-side 
