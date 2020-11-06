@@ -159,13 +159,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         if(buffer.size() < buffMaximum + left + WindowSize){
             String data = message.getData();
             int seqA = buffer.size();
-            int ACK = -1;
+            int ACK = seqA;
             int check = getCheckSumFromMessage(data) + seqA + ACK;
             buffer.add(new Packet(seqA,ACK,check,data));
             try{
                 while(seqPtr < left + WindowSize){
                     if (seqPtr < buffer.size())
-                        System.out.println("Sender: Sending packet " + seqPtr + " to receiver");
+                        System.out.println("A: Sending packet " + seqPtr + " to receiver");
                     toLayer3(A, buffer.get(seqPtr));
                     RTTBegin[buffer.get(seqPtr).getSeqnum()] = getTime();
                     if (left == seqPtr){
@@ -179,7 +179,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
                     //tmp = left;
                 }
             }catch (IndexOutOfBoundsException e){
-                System.err.println("Sender: Window and buffer are empty. No more packets to send.");
+                System.err.println("A: Window and buffer are empty. No more packets to send.");
             }
         }
         else{
@@ -197,13 +197,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
         System.out.println("A: Packet from layer 3 has been received");
         if (isCorrupted(packet)) {
             corruptNum++;
-            System.out.println("A: Packet corrupted!");
+            System.out.println("\033[31;4m" + "A: Packet corrupted!" + "\033[0m");
         } else {
             System.out.println("A: ACK packet correct");
             sackA = packet.getSackNum();
-
             int seq = packet.getSeqnum();
-            int ACK = packet.getAcknum();
+            System.out.println("A: SACK: " + sackA[0] +", " + sackA[1] +", " + sackA[2] +", " + sackA[3] +", " + sackA[4]);
             System.out.println("A: time: " + getTime() +" - " + RTTBegin[seq]);
             totalRtt += getTime() - RTTBegin[seq];
             totalRttTime++;
@@ -231,13 +230,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         rttStarted = getTime();
         Set<Integer> q = new HashSet<>();
         for(int i = 0; i < 5; i++){
-            if(sack[i] != -1) q.add(sack[i]);
+            if(sackA[i] != -1) q.add(sackA[i]);
         }
-        System.out.println("A: SACK:"+sack[0]+","+sack[1]+","+sack[2]+","+sack[3]+","+sack[4]);
         for (int i = left; i < seqPtr; i++) {
-            if(q.contains(i)) continue;
             System.out.println("A: Retransmitting unacknowledged packet " + i + ".");
+            if(q.contains(i)) continue;
             toLayer3(A,buffer.get(i));
+            RTTBegin[i] = getTime();
             //rttStarted[buffer.get(i).getSeqnum()] = getTime();
             retransmissionsNumber++;
         }
@@ -276,7 +275,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         System.out.println("B: Package from A was received through layer 3 ("+packet.getPayload()+").");
 
         if (isCorrupted(packet)) {
-            System.out.println("B: Packet corrupted!");
+            System.out.println("B: Packet corrupted!" + "\033[0m");
             if (isCorrupted(packet))
                 corruptNum++;
             //return;
@@ -284,7 +283,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
             System.out.println("B: Packet received from A checks out.");
             String data = packet.getPayload();
             sack[count] = packet.getSeqnum();
-
             count++;
             count = count%5;
             bufferB.put(packet.getSeqnum(),data);
@@ -293,6 +291,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
             int ACK = seqB;
             String message = "";
             int check = getCheckSumFromMessage(message) + seqB + ACK;
+            System.out.println("B: SACK: " + sack[0] +", " + sack[1] +", " + sack[2] +", " + sack[3] +", " + sack[4]);
             Packet newPacket = new Packet(seqB,ACK,check,message,sack);
             toLayer3(B, newPacket);
             while(bufferB.containsKey(sequenceNoExpected)){

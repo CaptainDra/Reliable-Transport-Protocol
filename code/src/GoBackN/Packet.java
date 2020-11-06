@@ -14,6 +14,7 @@ public class Packet
         acknum = p.getAcknum();
         checksum = p.getChecksum();
         payload = new String(p.getPayload());
+        sackNum = p.getSackNum();
     }
     public Packet(int seq, int ack, int check, String newPayload, int[] sack)
     {
