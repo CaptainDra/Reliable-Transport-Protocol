@@ -127,7 +127,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private double waitTime;
     private int[] sackA = new int[5];
     private int tmp;
-
+    private HashMap<Integer, Double> send;
+    private HashMap<Integer, Double> get;
+    private double[] RTTBegin = new double[1000];
+    private double[] RTTEnd = new double[1000];
 
     // GBN B
     private int sequenceNoExpected;
@@ -164,11 +167,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
                     if (seqPtr < buffer.size())
                         System.out.println("Sender: Sending packet " + seqPtr + " to receiver");
                     toLayer3(A, buffer.get(seqPtr));
+                    RTTBegin[buffer.get(seqPtr).getSeqnum()] = getTime();
                     if (left == seqPtr){
                         startTimer(A,waitTime);
                         rttStarted = getTime();
                     }
-
+                    double time = getTime();
+                    if(!send.containsKey(seqPtr)) send.put(seqPtr,time);
                     seqPtr++;
                     originalPacketsNumber++;
                     //tmp = left;
@@ -194,12 +199,19 @@ public class StudentNetworkSimulator extends NetworkSimulator
             corruptNum++;
             System.out.println("A: Packet corrupted!");
         } else {
-            System.out.println("Sender: ACK packet correct");
+            System.out.println("A: ACK packet correct");
             sackA = packet.getSackNum();
+            int seq = packet.getSeqnum();
+            System.out.println("A: time: " + getTime() +" - " + RTTBegin[seq]);
+            totalRtt += getTime() - RTTBegin[seq];
+            totalRttTime++;
+            if(!get.containsKey(seq)){
+                get.put(seq,getTime());
+            }
             if(left == packet.getSeqnum()) left++;
             if (left == seqPtr){
-                totalRtt = totalRtt + getTime() - rttStarted;
-                totalRttTime++;
+                //totalRtt = totalRtt + getTime() - rttStarted;
+                //totalRttTime++;
                 stopTimer(A);
             }
 
@@ -244,10 +256,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
         // Disk = new LinkedList<>();
         seqPtr = 0;
         //RxmtInterval = 200.0;
-        waitTime = 5 * RxmtInterval;
+        waitTime = 1 * RxmtInterval;
         for(int i = 0; i < 5; i++){
             sackA[i] = -1;
         }
+        send = new HashMap<>();
+        get = new HashMap<>();
     }
 
     // This routine will be called whenever a packet sent from the B-side
@@ -311,7 +325,16 @@ public class StudentNetworkSimulator extends NetworkSimulator
         int totalPacket = originalPacketsNumber + retransmissionsNumber + ACKByB;
         double lostRatio = (retransmissionsNumber - corruptNum) / (double) totalPacket;
         double corruptionRatio = (corruptNum) / (double) (totalPacket - (retransmissionsNumber - corruptNum));
-
+        double RTT = totalRtt/(double) totalRttTime;
+        double com = 0;
+        int num = 0;
+        for(int i = 0; i < originalPacketsNumber; i++){
+            if(send.containsKey(i) && get.containsKey(i)){
+                com += get.get(i) - send.get(i);
+                num++;
+            }
+        }
+        com = com/ (double)num;
 
         System.out.println("\n\n===============STATISTICS=======================");
         System.out.println("Number of original packets transmitted by A:" + originalPacketsNumber);
@@ -323,8 +346,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        System.out.println("Ratio of corrupted packets:" + (double)(corruptNum)/(double)(originalPacketsNumber));
         System.out.println("Ratio of lost packets:" +  lostRatio);
         System.out.println("Ratio of corrupted packets:" + corruptionRatio);
-        System.out.println("Average RTT:" );
-        System.out.println("Average communication time:" + "<YourVariableHere>");
+        System.out.println("Average RTT:"+RTT );
+        System.out.println("Average communication time:" + com);
         System.out.println("==================================================");
 
         // PRINT YOUR OWN STATISTIC HERE TO CHECK THE CORRECTNESS OF YOUR PROGRAM
