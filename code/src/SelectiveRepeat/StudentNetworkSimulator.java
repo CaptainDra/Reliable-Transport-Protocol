@@ -176,33 +176,29 @@ public class StudentNetworkSimulator extends NetworkSimulator
         if (ACKed[packet.getAcknum() % WindowSize]) {
             stopTimer(A);
             ACKed[packet.getAcknum() % WindowSize] = false;
-            if (packet.getAcknum() >= head) {
-                int oldHead = head;
-                head = packet.getAcknum() + 1;
 
-                for (int i = oldHead; i < head; i++) {
-                    if (RTTseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
-                        rttSum += getTime() - RTTseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
-                        RTTseqToTime.remove(senderWindow[i % WindowSize].getSeqnum());
-                        rttCount++;
-                    }
-                    if (COMMseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
-                        commSum += getTime() - COMMseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
-                        commCount++;
-                    }
-                    ACKed[i % WindowSize] = false;
-                    senderWindow[i % WindowSize] = null;
+            for (int i = head; i < packet.getAcknum() + 1; i++) {
+                if (RTTseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
+                    rttSum += getTime() - RTTseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
+                    RTTseqToTime.remove(senderWindow[i % WindowSize].getSeqnum());
+                    rttCount++;
                 }
-
-                bufferContent(head);
-
-                sendAllInWindow();
-
+                if (COMMseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
+                    commSum += getTime() - COMMseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
+                    commCount++;
+                }
+                ACKed[i % WindowSize] = false;
+                senderWindow[i % WindowSize] = null;
             }
+            head = packet.getAcknum() + 1;
+            bufferContent(head);
+
+            sendAllInWindow();
+
         }
         if (ACKed[packet.getAcknum() % WindowSize]){
-            toLayer3(A, senderWindow[(packet.getAcknum() - 1) % WindowSize]);
-            RTTseqToTime.put(senderWindow[(packet.getAcknum() - 1) % WindowSize].getSeqnum(), getTime());
+            toLayer3(A, senderWindow[(packet.getAcknum() + 1) % WindowSize]);
+            RTTseqToTime.put(senderWindow[(packet.getAcknum() + 1) % WindowSize].getSeqnum(), getTime());
             numOfRetransmittedPacket++;
             stopTimer(A);
             startTimer(A, RxmtInterval);
@@ -296,8 +292,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void Simulation_done()
     {
         int totalPacket = numOfOriginalTransPacket + numOfRetransmittedPacket + numOfACKedPacket;
-        double lostRatio = (numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
-        double corruptionRatio = (numOfCorruptedPacket) / (double) (totalPacket - (numOfRetransmittedPacket - numOfCorruptedPacket));
+        double lostRatio = (double)(numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
+        double corruptionRatio = (double)(numOfCorruptedPacket) / (double) (totalPacket - (numOfRetransmittedPacket - numOfCorruptedPacket));
         double avgRTT = (double) rttSum / (double) rttCount;
         double avgComm = (double) commSum / (double) commCount;
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
@@ -333,9 +329,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
 
-    private boolean isDuplicated (Packet packet) {
-        return ACKed[packet.getAcknum() % WindowSize];
-    }
 
     private void bufferContent(int windowHead) {
         int iter = windowHead;
