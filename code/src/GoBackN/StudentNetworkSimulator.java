@@ -159,7 +159,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
         if(buffer.size() < buffMaximum + left + WindowSize){
             String data = message.getData();
             int seqA = buffer.size();
-            int ACK = seqA;
+            int ACK = -1;
             int check = getCheckSumFromMessage(data) + seqA + ACK;
             buffer.add(new Packet(seqA,ACK,check,data));
             try{
@@ -201,7 +201,9 @@ public class StudentNetworkSimulator extends NetworkSimulator
         } else {
             System.out.println("A: ACK packet correct");
             sackA = packet.getSackNum();
+
             int seq = packet.getSeqnum();
+            int ACK = packet.getAcknum();
             System.out.println("A: time: " + getTime() +" - " + RTTBegin[seq]);
             totalRtt += getTime() - RTTBegin[seq];
             totalRttTime++;
@@ -229,11 +231,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
         rttStarted = getTime();
         Set<Integer> q = new HashSet<>();
         for(int i = 0; i < 5; i++){
-            if(sackA[i] != -1) q.add(sackA[i]);
+            if(sack[i] != -1) q.add(sack[i]);
         }
+        System.out.println("A: SACK:"+sack[0]+","+sack[1]+","+sack[2]+","+sack[3]+","+sack[4]);
         for (int i = left; i < seqPtr; i++) {
-            System.out.println("A: Retransmitting unacknowledged packet " + i + ".");
             if(q.contains(i)) continue;
+            System.out.println("A: Retransmitting unacknowledged packet " + i + ".");
             toLayer3(A,buffer.get(i));
             //rttStarted[buffer.get(i).getSeqnum()] = getTime();
             retransmissionsNumber++;
@@ -281,6 +284,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
             System.out.println("B: Packet received from A checks out.");
             String data = packet.getPayload();
             sack[count] = packet.getSeqnum();
+
             count++;
             count = count%5;
             bufferB.put(packet.getSeqnum(),data);
