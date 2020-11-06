@@ -116,17 +116,13 @@ public class StudentNetworkSimulator extends NetworkSimulator
         LimitSeqNo = winsize*2; // set appropriately; assumes SR here!
         RxmtInterval = delay;
     }
-    // A
+
     private int seqNo = 0;
-
-    private LinkedList<Packet> senderBuffer = new LinkedList<>();
     private int head = 0;
-
-    // init
-    private boolean[] ACKed;
+    private LinkedList<Packet> senderBuffer = new LinkedList<>();
     Packet[] senderWindow;
     Packet[] receiverWindow;
-    HashMap<Integer, Double> seqToTime = new HashMap<>();
+    private boolean[] ACKed;
     private int numOfOriginalTransPacket = 0;
     private int numOfCorruptedPacket = 0;
     private int numOfRetransmittedPacket = 0;
@@ -135,6 +131,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
     private Packet lastReceivedPacket;
     private int lastReceivedSeq = -1;
 
+    HashMap<Integer, Double> RTTseqToTime = new HashMap<>();
+    HashMap<Integer, Double> COMMseqToTime = new HashMap<>();
+    private int rttSum = 0;
+    private int commSum = 0;
+    private int rttCount = 0;
+    private int commCount = 0;
 
     // This routine will be called whenever the upper layer at the sender [A]
     // has a message to send.  It is the job of your protocol to insure that
@@ -180,6 +182,15 @@ public class StudentNetworkSimulator extends NetworkSimulator
                 head = packet.getAcknum() + 1;
 
                 for (int i = oldHead; i < head; i++) {
+                    if (RTTseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
+                        rttSum += getTime() - RTTseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
+                        RTTseqToTime.remove(senderWindow[i % WindowSize].getSeqnum());
+                        rttCount++;
+                    }
+                    if (COMMseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
+                        commSum += getTime() - COMMseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
+                        commCount++;
+                    }
                     ACKed[i % WindowSize] = false;
                     senderWindow[i % WindowSize] = null;
                 }
@@ -191,8 +202,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
             }
         }
         if (ACKed[packet.getAcknum() % WindowSize]){
-            toLayer3(A, senderWindow[(packet.getAcknum() + 1) % WindowSize]);
-            seqToTime.put(senderWindow[(packet.getAcknum() + 1) % WindowSize].getSeqnum(), getTime());
+            toLayer3(A, senderWindow[(packet.getAcknum() - 1) % WindowSize]);
+            RTTseqToTime.put(senderWindow[(packet.getAcknum() - 1) % WindowSize].getSeqnum(), getTime());
             numOfRetransmittedPacket++;
             stopTimer(A);
             startTimer(A, RxmtInterval);
@@ -209,7 +220,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void aTimerInterrupt()
     {
         toLayer3(A, senderWindow[head % WindowSize]);
-        seqToTime.put(senderWindow[head % WindowSize].getSeqnum(), getTime());
+        RTTseqToTime.put(senderWindow[head % WindowSize].getSeqnum(), getTime());
         numOfRetransmittedPacket++;
         stopTimer(A);
         startTimer(A, RxmtInterval);
@@ -288,6 +299,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
         int totalPacket = numOfOriginalTransPacket + numOfRetransmittedPacket + numOfACKedPacket;
         double lostRatio = (numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
         double corruptionRatio = (numOfCorruptedPacket) / (double) (totalPacket - (numOfRetransmittedPacket - numOfCorruptedPacket));
+        double avgRTT = (double) rttSum / (double) rttCount;
+        double avgComm = (double) commSum / (double) commCount;
         // TO PRINT THE STATISTICS, FILL IN THE DETAILS BY PUTTING VARIBALE NAMES. DO NOT CHANGE THE FORMAT OF PRINTED OUTPUT
         System.out.println("\n\n===============STATISTICS=======================");
         System.out.println("Number of original packets transmitted by A:" + numOfOriginalTransPacket);
@@ -297,8 +310,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
         System.out.println("Number of corrupted packets:" + numOfCorruptedPacket);
         System.out.println("Ratio of lost packets:" + lostRatio);
         System.out.println("Ratio of corrupted packets:" + corruptionRatio);
-        System.out.println("Average RTT:" + "<YourVariableHere>");
-        System.out.println("Average communication time:" + "<YourVariableHere>");
+        System.out.println("Average RTT:" + avgRTT);
+        System.out.println("Average communication time:" + avgComm);
         System.out.println("==================================================");
 
         // PRINT YOUR OWN STATISTIC HERE TO CHECK THE CORRECTNESS OF YOUR PROGRAM
@@ -348,7 +361,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
             }
             toLayer3(A, senderWindow[i]);
             ACKed[i] = true;
-            seqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            RTTseqToTime.put(senderWindow[i].getSeqnum(), getTime());
+            COMMseqToTime.put(senderWindow[i].getSeqnum(), getTime());
             numOfOriginalTransPacket++;
             stopTimer(A);
             startTimer(A, RxmtInterval);
