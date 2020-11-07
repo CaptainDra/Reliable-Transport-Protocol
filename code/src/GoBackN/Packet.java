@@ -16,6 +16,15 @@ public class Packet
         payload = new String(p.getPayload());
         sackNum = p.getSackNum();
     }
+
+    /**
+     * new constructor for packet with SACK
+     * @param seq
+     * @param ack
+     * @param check
+     * @param newPayload
+     * @param sack five int with default value of -1
+     */
     public Packet(int seq, int ack, int check, String newPayload, int[] sack)
     {
         seqnum = seq;
