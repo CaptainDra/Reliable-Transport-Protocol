@@ -244,7 +244,8 @@ public class StudentNetworkSimulator extends NetworkSimulator
             System.out.println("A: Retransmitting unacknowledged packet " + i + "." + sequenceNoExpected);
             if(q.contains(i)){
                 System.out.println("A: in SACK" + i + ".");
-
+                // use continue to use sack
+                //continue;
             }
             stopTimer(A);
             startTimer(A, waitTime);
