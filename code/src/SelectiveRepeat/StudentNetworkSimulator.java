@@ -116,19 +116,22 @@ public class StudentNetworkSimulator extends NetworkSimulator
         RxmtInterval = delay;
     }
 
+    // For protocal use
     private int seqNo = 0;
     private int head = 0;
     private LinkedList<Packet> senderBuffer = new LinkedList<>();
     Packet[] senderWindow;
     Packet[] receiverWindow;
     private boolean[] ACKed;
+    private Packet lastReceivedPacket;
+    private int lastReceivedSeq = -1;
+
+    // For statistics use
     private int numOfOriginalTransPacket = 0;
     private int numOfCorruptedPacket = 0;
     private int numOfRetransmittedPacket = 0;
     private int numOfACKedPacket = 0;
     private int numOfDeliverTo5 = 0;
-    private Packet lastReceivedPacket;
-    private int lastReceivedSeq = -1;
 
     HashMap<Integer, Double> RTTseqToTime = new HashMap<>();
     HashMap<Integer, Double> COMMseqToTime = new HashMap<>();
@@ -146,7 +149,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
     protected void aOutput(Message message)
     {
         String data = message.getData();
-        //seq ack check playLoad
         Packet newPacket = new Packet(seqNo, -1, 0, data);
         newPacket.setChecksum(getCheckSumFromPacket(newPacket));
         senderBuffer.add(newPacket);
@@ -154,7 +156,6 @@ public class StudentNetworkSimulator extends NetworkSimulator
 
         bufferContent(head);
         sendAllInWindow();
-
     }
 
 
@@ -167,22 +168,28 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        2. if get new ACK, slide window and sent new data packets waiting
 //        3. if duplicate, retransmit first unACK data packet
 
+        // corrupted packet
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
             return;
         }
 
+        // right packet
         if (ACKed[packet.getAcknum() % WindowSize]) {
             stopTimer(A);
             ACKed[packet.getAcknum() % WindowSize] = false;
 
+
+            //slide window
             for (int i = head; i < packet.getAcknum() + 1; i++) {
+                // update rtt related calculation
                 if (RTTseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
                     rttSum += getTime() - RTTseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
                     RTTseqToTime.remove(senderWindow[i % WindowSize].getSeqnum());
                     rttCount++;
                 }
+                // update communication time related calculation
                 if (COMMseqToTime.containsKey(senderWindow[i % WindowSize].getSeqnum())) {
                     commSum += getTime() - COMMseqToTime.get(senderWindow[i % WindowSize].getSeqnum());
                     commCount++;
@@ -191,11 +198,12 @@ public class StudentNetworkSimulator extends NetworkSimulator
                 senderWindow[i % WindowSize] = null;
             }
             head = packet.getAcknum() + 1;
+
             bufferContent(head);
-
             sendAllInWindow();
-
         }
+
+        // duplicated packet
         if (ACKed[packet.getAcknum() % WindowSize]){
             toLayer3(A, senderWindow[(packet.getAcknum() + 1) % WindowSize]);
             RTTseqToTime.put(senderWindow[(packet.getAcknum() + 1) % WindowSize].getSeqnum(), getTime());
@@ -244,23 +252,28 @@ public class StudentNetworkSimulator extends NetworkSimulator
 //        3.If the data packet is new, and out of order, buffer the data packet and send an ACK
 //        4.If the data packet is duplicate, drop it and send an ACK
 
+        // corrupted packet
         if (isCorrupted(packet)) {
             System.out.println("Receive corrupted packet");
             numOfCorruptedPacket++;
             return;
         }
+
         packet.setAcknum(packet.getSeqnum());
         packet.setChecksum(getCheckSumFromPacket(packet));
+
+        // duplicated packet
         if (packet.getSeqnum() == lastReceivedSeq) {
             System.out.println("Receive duplicated packet");
             toLayer3(B, lastReceivedPacket);
             numOfACKedPacket++;
-        } else if (packet.getSeqnum() == lastReceivedSeq + 1) {
+        } else if (packet.getSeqnum() == lastReceivedSeq + 1) {  // in order
             toLayer5(packet.getPayload());
             numOfDeliverTo5++;
             lastReceivedPacket = packet;
             lastReceivedSeq++;
             numOfACKedPacket++;
+            //subsequent data
             while (receiverWindow[(lastReceivedSeq + 1) % WindowSize] != null &&
                     receiverWindow[(lastReceivedSeq + 1) % WindowSize].getSeqnum() == (lastReceivedSeq + 1)) {
                 toLayer5(receiverWindow[(lastReceivedSeq + 1) % WindowSize].getPayload());
@@ -270,7 +283,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
                 lastReceivedSeq++;
             }
             toLayer3(B, lastReceivedPacket);
-        } else {
+        } else {  //out of order
             receiverWindow[packet.getSeqnum() % WindowSize] = packet;
             toLayer3(B, lastReceivedPacket);
             numOfACKedPacket++;
@@ -291,6 +304,7 @@ public class StudentNetworkSimulator extends NetworkSimulator
     // Use to print final statistics
     protected void Simulation_done()
     {
+        // use formula from instruction
         int totalPacket = numOfOriginalTransPacket + numOfRetransmittedPacket + numOfACKedPacket;
         double lostRatio = (double)(numOfRetransmittedPacket - numOfCorruptedPacket) / (double) totalPacket;
         double corruptionRatio = (double)(numOfCorruptedPacket) / (double) (totalPacket - (numOfRetransmittedPacket - numOfCorruptedPacket));
@@ -315,6 +329,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
         //System.out.println("Example statistic you want to check e.g. number of ACK packets received by A :" + "<YourVariableHere>");
     }
 
+    /*
+    * To calculate the checksum from the input packet
+    * checksum = sequence number + ACK number + int value of all characters in payLoad string
+    * */
     private int getCheckSumFromPacket (Packet packet) {
         String payLoad = packet.getPayload();
         int checkSum = 0;
@@ -325,11 +343,17 @@ public class StudentNetworkSimulator extends NetworkSimulator
         return checkSum;
     }
 
+
+    /*
+    * To check if a specific packet is corrupted by comparing the checkSum
+    * */
     private boolean isCorrupted (Packet packet) {
         return getCheckSumFromPacket(packet) != packet.getChecksum();
     }
 
-
+    /*
+    * All the empty slots in the window would be filled with packets in the buffer
+    * */
     private void bufferContent(int windowHead) {
         int iter = windowHead;
         int end = windowHead + WindowSize;
@@ -343,6 +367,10 @@ public class StudentNetworkSimulator extends NetworkSimulator
         }
     }
 
+    /*
+    * Check if there exist unACKed packet in the sender window
+    * if so, send those data
+    * */
     private void sendAllInWindow() {
         for (int i = 0; i < senderWindow.length; i++) {
             if (senderWindow[i] == null) {
